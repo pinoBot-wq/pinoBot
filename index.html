@@ -1,1 +1,456 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="color-scheme" content="light dark">
+<title>Crypto Trading Bot</title>
+<script src="https://telegram.org/js/telegram-web-app.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+<style>
+  :root {
+    --bg: #0f0f13; --card: #1a1a22; --border: rgba(255,255,255,0.08);
+    --text: #f0f0f5; --muted: #888; --accent: #4ade80; --red: #f87171;
+    --amber: #fbbf24; --blue: #60a5fa; --purple: #a78bfa;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+    background: var(--bg); color: var(--text); min-height: 100vh;
+    padding-bottom: 80px;
+  }
+  .header {
+    background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+    padding: 16px; border-bottom: 1px solid var(--border);
+    position: sticky; top: 0; z-index: 100;
+  }
+  .header-top { display: flex; align-items: center; justify-content: space-between; }
+  .logo { display: flex; align-items: center; gap: 8px; font-size: 16px; font-weight: 700; }
+  .logo-icon { width: 32px; height: 32px; background: var(--accent); border-radius: 8px;
+    display: flex; align-items: center; justify-content: center; font-size: 16px; }
+  .status-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
+    animation: pulse 2s infinite; }
+  @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.3} }
+  .status-text { font-size: 11px; color: var(--muted); }
+  .grid4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 8px; padding: 12px; }
+  .grid2 { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; padding: 0 12px 8px; }
+  .kpi { background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 10px; }
+  .kpi-label { font-size: 9px; color: var(--muted); text-transform: uppercase;
+    letter-spacing: .05em; margin-bottom: 4px; }
+  .kpi-value { font-size: 18px; font-weight: 700; }
+  .kpi-sub { font-size: 10px; color: var(--muted); margin-top: 2px; }
+  .up { color: var(--accent); }
+  .down { color: var(--red); }
+  .neutral { color: var(--muted); }
+  .section { padding: 0 12px 8px; }
+  .section-title { font-size: 12px; font-weight: 600; color: var(--muted);
+    text-transform: uppercase; letter-spacing: .06em; margin-bottom: 8px;
+    display: flex; align-items: center; gap: 6px; }
+  .card { background: var(--card); border: 1px solid var(--border); border-radius: 12px;
+    padding: 12px; margin-bottom: 8px; }
+  .signal-row { display: flex; align-items: center; gap: 10px; padding: 8px 0;
+    border-bottom: 1px solid var(--border); }
+  .signal-row:last-child { border-bottom: none; }
+  .coin-badge { width: 32px; height: 32px; border-radius: 50%; display: flex;
+    align-items: center; justify-content: center; font-size: 11px; font-weight: 700;
+    flex-shrink: 0; }
+  .tag { display: inline-flex; align-items: center; gap: 3px; padding: 2px 7px;
+    border-radius: 20px; font-size: 10px; font-weight: 700; }
+  .tag-buy { background: rgba(74,222,128,.15); color: var(--accent); }
+  .tag-sell { background: rgba(248,113,113,.15); color: var(--red); }
+  .tag-hold { background: rgba(251,191,36,.15); color: var(--amber); }
+  .progress-bar { height: 4px; background: rgba(255,255,255,.08); border-radius: 2px;
+    overflow: hidden; flex: 1; }
+  .progress-fill { height: 100%; border-radius: 2px; transition: width .4s; }
+  .ind-row { display: flex; align-items: center; gap: 8px; margin-bottom: 8px; }
+  .ind-label { font-size: 11px; color: var(--muted); width: 60px; flex-shrink: 0; }
+  .ind-note { font-size: 10px; color: var(--muted); width: 80px; text-align: right; }
+  .strat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .strat-btn { background: rgba(255,255,255,.04); border: 1px solid var(--border);
+    border-radius: 8px; padding: 8px 10px; cursor: pointer; transition: all .15s; }
+  .strat-btn.on { border-color: var(--accent); background: rgba(74,222,128,.08); }
+  .strat-name { font-size: 12px; font-weight: 600; color: var(--text); }
+  .strat-desc { font-size: 10px; color: var(--muted); margin-top: 2px; line-height: 1.4; }
+  .notify-item { display: flex; align-items: center; justify-content: space-between;
+    padding: 8px 0; border-bottom: 1px solid var(--border); }
+  .notify-item:last-child { border-bottom: none; }
+  .toggle { position: relative; width: 36px; height: 20px; }
+  .toggle input { opacity: 0; width: 0; height: 0; }
+  .toggle-slider { position: absolute; cursor: pointer; top:0; left:0; right:0; bottom:0;
+    background: rgba(255,255,255,.1); border-radius: 20px; transition: .3s; }
+  .toggle input:checked + .toggle-slider { background: var(--accent); }
+  .toggle-slider:before { content:''; position:absolute; width:16px; height:16px;
+    left:2px; bottom:2px; background:white; border-radius:50%; transition:.3s; }
+  .toggle input:checked + .toggle-slider:before { transform:translateX(16px); }
+  .log-row { display: flex; gap: 8px; padding: 5px 0; border-bottom: 1px solid var(--border);
+    font-size: 11px; }
+  .log-row:last-child { border-bottom: none; }
+  .log-time { color: var(--muted); font-family: monospace; flex-shrink: 0; }
+  .risk-row { margin-bottom: 12px; }
+  .risk-label { display: flex; justify-content: space-between; font-size: 12px;
+    color: var(--muted); margin-bottom: 4px; }
+  .risk-val { font-weight: 600; color: var(--text); }
+  input[type=range] { width: 100%; accent-color: var(--accent); height: 4px; }
+  .bottom-nav { position: fixed; bottom: 0; left: 0; right: 0;
+    background: var(--card); border-top: 1px solid var(--border);
+    display: flex; padding: 8px 0; z-index: 100; }
+  .nav-btn { flex: 1; display: flex; flex-direction: column; align-items: center;
+    gap: 3px; cursor: pointer; padding: 4px 0; opacity: .5; transition: opacity .15s; }
+  .nav-btn.active { opacity: 1; }
+  .nav-icon { font-size: 20px; }
+  .nav-label { font-size: 9px; font-weight: 600; }
+  .page { display: none; }
+  .page.active { display: block; }
+  .mini-chart-wrap { height: 100px; position: relative; }
+  .tg-setup input { width: 100%; padding: 10px 12px; background: rgba(255,255,255,.05);
+    border: 1px solid var(--border); border-radius: 8px; color: var(--text);
+    font-size: 13px; margin-bottom: 8px; }
+  .btn-primary { width: 100%; padding: 12px; background: var(--accent); border: none;
+    border-radius: 10px; color: #000; font-size: 14px; font-weight: 700;
+    cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 6px; }
+  .btn-secondary { width: 100%; padding: 10px; background: rgba(255,255,255,.06);
+    border: 1px solid var(--border); border-radius: 10px; color: var(--text);
+    font-size: 13px; font-weight: 600; cursor: pointer; margin-top: 6px; }
+  .alert { border-radius: 8px; padding: 10px 12px; font-size: 12px; margin-bottom: 8px; }
+  .alert-success { background: rgba(74,222,128,.1); border: 1px solid rgba(74,222,128,.3); color: var(--accent); }
+  .alert-info { background: rgba(96,165,250,.1); border: 1px solid rgba(96,165,250,.3); color: var(--blue); }
+</style>
+</head>
+<body>
 
+<!-- HEADER -->
+<div class="header">
+  <div class="header-top">
+    <div class="logo">
+      <div class="logo-icon">🤖</div>
+      Crypto Bot
+    </div>
+    <div style="display:flex;align-items:center;gap:6px">
+      <div class="status-dot" id="mainDot"></div>
+      <span class="status-text" id="mainStatus">Bot attivo</span>
+    </div>
+  </div>
+  <div id="userGreet" style="font-size:11px;color:var(--muted);margin-top:6px"></div>
+</div>
+
+<!-- PAGE: DASHBOARD -->
+<div class="page active" id="page-home">
+  <div class="grid4" style="padding-top:12px">
+    <div class="kpi">
+      <div class="kpi-label">Capitale</div>
+      <div class="kpi-value up" id="capital">€5.00</div>
+      <div class="kpi-sub up" id="capChange">+€0.00</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Rendita</div>
+      <div class="kpi-value up" id="pnlPct">+0.0%</div>
+      <div class="kpi-sub neutral">7 giorni</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Segnali</div>
+      <div class="kpi-value" id="sigCount">3</div>
+      <div class="kpi-sub neutral">oggi</div>
+    </div>
+    <div class="kpi">
+      <div class="kpi-label">Win rate</div>
+      <div class="kpi-value up" id="winRate">68%</div>
+      <div class="kpi-sub neutral">30 giorni</div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">📊 Segnali live</div>
+    <div class="card" id="signalList"></div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">📈 Grafico BTC/EUR</div>
+    <div class="card">
+      <div class="mini-chart-wrap"><canvas id="miniChart" role="img" aria-label="Andamento prezzo BTC simulato"></canvas></div>
+    </div>
+  </div>
+
+  <div class="section">
+    <div class="section-title">⚡ Analisi tecnica</div>
+    <div class="card" id="indicators"></div>
+  </div>
+</div>
+
+<!-- PAGE: STRATEGIE -->
+<div class="page" id="page-strat">
+  <div class="section" style="padding-top:12px">
+    <div class="section-title">🧠 Strategie di trading</div>
+    <div class="alert alert-info">Con 5€ usa DCA Smart: è la più sicura per piccoli capitali.</div>
+    <div class="strat-grid" id="stratGrid"></div>
+  </div>
+  <div class="section" style="margin-top:8px">
+    <div class="section-title">⚙️ Gestione rischio</div>
+    <div class="card">
+      <div class="risk-row">
+        <div class="risk-label"><span>Rischio per trade</span><span class="risk-val" id="rv1">10%</span></div>
+        <input type="range" min="5" max="30" value="10" oninput="document.getElementById('rv1').textContent=this.value+'%'">
+      </div>
+      <div class="risk-row">
+        <div class="risk-label"><span>Stop loss</span><span class="risk-val" id="rv2">5%</span></div>
+        <input type="range" min="2" max="20" value="5" oninput="document.getElementById('rv2').textContent=this.value+'%'">
+      </div>
+      <div class="risk-row">
+        <div class="risk-label"><span>Take profit</span><span class="risk-val" id="rv3">15%</span></div>
+        <input type="range" min="5" max="50" value="15" oninput="document.getElementById('rv3').textContent=this.value+'%'">
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- PAGE: NOTIFICHE -->
+<div class="page" id="page-notif">
+  <div class="section" style="padding-top:12px">
+    <div class="section-title">🔔 Notifiche Telegram</div>
+    <div class="alert alert-success" id="tgConnStatus" style="display:none">✅ Connesso! Le notifiche verranno inviate in questa chat.</div>
+    <div class="card">
+      <div class="notify-item">
+        <div>
+          <div style="font-size:13px;font-weight:600">Segnali buy/sell</div>
+          <div style="font-size:11px;color:var(--muted)">Avviso immediato per ogni segnale</div>
+        </div>
+        <label class="toggle"><input type="checkbox" checked id="n1"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="notify-item">
+        <div>
+          <div style="font-size:13px;font-weight:600">Variazione &gt;3%</div>
+          <div style="font-size:11px;color:var(--muted)">Alert su movimenti forti</div>
+        </div>
+        <label class="toggle"><input type="checkbox" checked id="n2"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="notify-item">
+        <div>
+          <div style="font-size:13px;font-weight:600">RSI estremo</div>
+          <div style="font-size:11px;color:var(--muted)">RSI &lt;30 o &gt;70</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="n3"><span class="toggle-slider"></span></label>
+      </div>
+      <div class="notify-item">
+        <div>
+          <div style="font-size:13px;font-weight:600">Riassunto giornaliero</div>
+          <div style="font-size:11px;color:var(--muted)">Ogni giorno alle 20:00</div>
+        </div>
+        <label class="toggle"><input type="checkbox" checked id="n4"><span class="toggle-slider"></span></label>
+      </div>
+    </div>
+  </div>
+  <div class="section">
+    <div class="section-title">📋 Log eventi</div>
+    <div class="card" id="logList" style="max-height:200px;overflow-y:auto"></div>
+  </div>
+</div>
+
+<!-- PAGE: SETTINGS -->
+<div class="page" id="page-set">
+  <div class="section" style="padding-top:12px">
+    <div class="section-title">⚙️ Impostazioni bot</div>
+    <div class="card">
+      <div style="font-size:13px;font-weight:600;margin-bottom:12px">Capitale iniziale</div>
+      <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <input type="number" id="capInput" value="5" min="1" step="0.5"
+          style="flex:1;padding:10px;background:rgba(255,255,255,.05);border:1px solid var(--border);border-radius:8px;color:var(--text);font-size:16px;font-weight:700">
+        <span style="font-size:20px;color:var(--muted)">€</span>
+      </div>
+      <button class="btn-primary" onclick="saveCapital()">💾 Salva impostazioni</button>
+    </div>
+    <div class="card" style="margin-top:8px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:8px">Exchange da monitorare</div>
+      <div style="display:flex;flex-wrap:wrap;gap:6px" id="exchangeList"></div>
+    </div>
+    <div class="card" style="margin-top:8px">
+      <div style="font-size:13px;font-weight:600;margin-bottom:6px">Info versione</div>
+      <div style="font-size:11px;color:var(--muted);line-height:1.8">
+        Crypto Bot v1.0<br>
+        Dati: CoinGecko API (gratuita)<br>
+        Aggiornamento: ogni 60 min<br>
+        Hosting: GitHub Pages (HTTPS)
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- BOTTOM NAV -->
+<div class="bottom-nav">
+  <div class="nav-btn active" onclick="switchPage('home',this)">
+    <span class="nav-icon">📊</span>
+    <span class="nav-label">Dashboard</span>
+  </div>
+  <div class="nav-btn" onclick="switchPage('strat',this)">
+    <span class="nav-icon">🧠</span>
+    <span class="nav-label">Strategie</span>
+  </div>
+  <div class="nav-btn" onclick="switchPage('notif',this)">
+    <span class="nav-icon">🔔</span>
+    <span class="nav-label">Notifiche</span>
+  </div>
+  <div class="nav-btn" onclick="switchPage('set',this)">
+    <span class="nav-icon">⚙️</span>
+    <span class="nav-label">Config</span>
+  </div>
+</div>
+
+<script>
+// === INIT TELEGRAM WEBAPP ===
+const tg = window.Telegram?.WebApp;
+if(tg) {
+  tg.ready();
+  tg.expand();
+  const u = tg.initDataUnsafe?.user;
+  if(u) {
+    document.getElementById('userGreet').textContent = 'Ciao ' + (u.first_name||'') + ' 👋 · ID: ' + u.id;
+    document.getElementById('tgConnStatus').style.display = 'block';
+  }
+  if(tg.colorScheme==='dark') document.documentElement.style.setProperty('--bg','#0a0a0f');
+}
+
+// === DATI ===
+const coins = [
+  {id:'BTC', color:'#f7931a', price:58420, change:2.3, rsi:52, signal:'buy', conf:78},
+  {id:'ETH', color:'#627eea', price:2841, change:-1.1, rsi:68, signal:'hold', conf:55},
+  {id:'SOL', color:'#9945ff', price:142, change:4.7, rsi:28, signal:'buy', conf:91},
+  {id:'BNB', color:'#f3ba2f', price:378, change:0.4, rsi:71, signal:'sell', conf:82},
+  {id:'XRP', color:'#346aa9', price:0.52, change:-0.8, rsi:45, signal:'hold', conf:40},
+];
+const indicators = [
+  {name:'RSI(14)',val:52,color:'#60a5fa',note:'Neutro'},
+  {name:'MACD',val:74,color:'#4ade80',note:'Rialzista'},
+  {name:'BB Band',val:45,color:'#fbbf24',note:'Bassa vol.'},
+  {name:'Volume',val:86,color:'#a78bfa',note:'Alto'},
+];
+const strategies = [
+  {name:'DCA Smart',desc:'Acquisti periodici automatici · ideale per 5€',on:true},
+  {name:'RSI Rebound',desc:'Compra RSI<30, vendi RSI>70',on:false},
+  {name:'MA Cross',desc:'Incrocio medie mobili 7/21 giorni',on:false},
+  {name:'Vol. Spike',desc:'Anticipa movimenti da picchi volume',on:false},
+];
+const logs = [
+  {t:'16:41',msg:'SOL RSI=28 → segnale BUY',c:'#4ade80'},
+  {t:'16:38',msg:'BNB RSI=71 → segnale SELL',c:'#f87171'},
+  {t:'16:30',msg:'Scansione completata: 5 asset',c:'#888'},
+  {t:'16:15',msg:'Notifica Telegram inviata: BUY SOL',c:'#60a5fa'},
+  {t:'15:50',msg:'DCA: prossimo acquisto fra 10 min',c:'#888'},
+];
+const exchanges = ['Binance','Coinbase','Kraken','Bybit','KuCoin'];
+
+let capitalVal = 5.00;
+
+// === RENDER SIGNALS ===
+function renderSignals(){
+  document.getElementById('signalList').innerHTML = coins.map(c=>`
+    <div class="signal-row">
+      <div class="coin-badge" style="background:${c.color}22;color:${c.color}">${c.id.slice(0,2)}</div>
+      <div style="flex:1">
+        <div style="display:flex;align-items:center;gap:6px;margin-bottom:4px">
+          <span style="font-size:13px;font-weight:700">${c.id}</span>
+          <span class="tag ${c.signal==='buy'?'tag-buy':c.signal==='sell'?'tag-sell':'tag-hold'}">${c.signal.toUpperCase()}</span>
+          <span style="font-size:11px;color:${c.change>=0?'#4ade80':'#f87171'};margin-left:auto">${c.change>=0?'+':''}${c.change}%</span>
+        </div>
+        <div style="display:flex;align-items:center;gap:6px">
+          <span style="font-size:10px;color:#888">RSI ${c.rsi}</span>
+          <div class="progress-bar"><div class="progress-fill" style="width:${c.conf}%;background:${c.signal==='buy'?'#4ade80':c.signal==='sell'?'#f87171':'#fbbf24'}"></div></div>
+          <span style="font-size:10px;color:#888">${c.conf}%</span>
+        </div>
+      </div>
+    </div>`).join('');
+}
+
+// === RENDER INDICATORS ===
+function renderIndicators(){
+  document.getElementById('indicators').innerHTML = indicators.map(i=>`
+    <div class="ind-row">
+      <span class="ind-label">${i.name}</span>
+      <div class="progress-bar"><div class="progress-fill" style="width:${i.val}%;background:${i.color}"></div></div>
+      <span class="ind-note">${i.note} (${i.val})</span>
+    </div>`).join('');
+}
+
+// === RENDER STRATEGIES ===
+function renderStrats(){
+  document.getElementById('stratGrid').innerHTML = strategies.map((s,i)=>`
+    <div class="strat-btn${s.on?' on':''}" onclick="toggleStrat(${i},this)">
+      <div class="strat-name">${s.name}</div>
+      <div class="strat-desc">${s.desc}</div>
+    </div>`).join('');
+}
+
+function toggleStrat(i,el){
+  strategies[i].on = !strategies[i].on;
+  el.classList.toggle('on');
+}
+
+// === RENDER LOG ===
+function renderLog(){
+  document.getElementById('logList').innerHTML = logs.map(l=>`
+    <div class="log-row">
+      <span class="log-time">${l.t}</span>
+      <span style="color:${l.c}">${l.msg}</span>
+    </div>`).join('');
+}
+
+// === RENDER EXCHANGES ===
+function renderExchanges(){
+  document.getElementById('exchangeList').innerHTML = exchanges.map((e,i)=>`
+    <div onclick="this.classList.toggle('on');this.style.borderColor=this.classList.contains('on')?'#4ade80':'rgba(255,255,255,.08)';"
+      style="padding:6px 10px;border:1px solid ${i<2?'#4ade80':'rgba(255,255,255,.08)'};border-radius:6px;font-size:12px;font-weight:600;cursor:pointer;color:${i<2?'#4ade80':'#888'}" class="${i<2?'on':''}">${e}</div>`).join('');
+}
+
+// === MINI CHART ===
+let miniChart;
+function buildChart(){
+  const ctx = document.getElementById('miniChart').getContext('2d');
+  const pts = Array.from({length:24},(_,i)=>58000+Math.sin(i*.4)*1200+Math.random()*400);
+  if(miniChart) miniChart.destroy();
+  miniChart = new Chart(ctx, {
+    type:'line', data:{
+      labels: pts.map((_,i)=>i+'h'),
+      datasets:[{data:pts,borderColor:'#4ade80',borderWidth:2,fill:true,
+        backgroundColor:'rgba(74,222,128,0.05)',pointRadius:0,tension:.4}]
+    },
+    options:{responsive:true,maintainAspectRatio:false,
+      plugins:{legend:{display:false}},
+      scales:{x:{display:false},y:{display:false}}}
+  });
+}
+
+// === NAVIGATION ===
+function switchPage(name,btn){
+  document.querySelectorAll('.page').forEach(p=>p.classList.remove('active'));
+  document.querySelectorAll('.nav-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('page-'+name).classList.add('active');
+  btn.classList.add('active');
+}
+
+// === CAPITAL SIMULATION ===
+function simCapital(){
+  capitalVal += (Math.random()-.4)*.04;
+  capitalVal = Math.max(capitalVal,4.5);
+  const pnl = ((capitalVal/5-1)*100);
+  document.getElementById('capital').textContent = '€'+capitalVal.toFixed(2);
+  document.getElementById('capChange').textContent = (pnl>=0?'+':'')+'€'+(capitalVal-5).toFixed(2);
+  document.getElementById('capChange').className = 'kpi-sub '+(pnl>=0?'up':'down');
+  document.getElementById('pnlPct').textContent = (pnl>=0?'+':'')+pnl.toFixed(1)+'%';
+  document.getElementById('pnlPct').className = 'kpi-value '+(pnl>=0?'up':'down');
+}
+
+function saveCapital(){
+  const v = parseFloat(document.getElementById('capInput').value);
+  if(v>0){ capitalVal=v; if(tg) tg.showAlert('✅ Capitale salvato: €'+v.toFixed(2)); }
+}
+
+// === INIT ===
+renderSignals();
+renderIndicators();
+renderStrats();
+renderLog();
+renderExchanges();
+buildChart();
+setInterval(simCapital, 3500);
+setInterval(buildChart, 12000);
+</script>
+</body>
+</html>
